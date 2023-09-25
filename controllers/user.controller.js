@@ -43,21 +43,24 @@ const register = async (req, res, next) => {
 const login = async (req, res, next) => {
     try {
         const { email, password } = req.body;
+
         if (!email || !password) {
             return next(new AppError('All fields are required', 400));
         }
 
         const user = await User.findOne({ email }).select('+password');
+
         if (!user || !user.comparePassword(password)) {
             return next(new AppError('Email or Password does not matched', 400));
         }
         const token = await user.generateJWTToken();
+
         user.password = undefined;
         res.cookie('token', token, cookieOptions);
         res.status(200).json({
             success: true,
             message: 'User loggedin successfully',
-            usre,
+            user,
         });
     } catch (e) {
         return next(new AppError(e.message, 500));
