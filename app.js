@@ -9,6 +9,7 @@ const app = express();
 config();
 app.use(express.json());
 app.use(cookieParser());
+app.use(express.urlencoded({extended: true}));
 app.use(morgan('dev'));
 app.use(cors({
     origin: [process.env.FRONTEND_URL],
