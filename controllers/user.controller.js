@@ -133,7 +133,7 @@ const forgotPassword = async (req, res, next) => {
         }
         const resetToken = await user.generatePasswordResetToken();
         await user.save();
-        const resetPasswordUrl = `${process.env.FRONTEND_URL}/reset/${resetToken}`;
+        const resetPasswordUrl = `${process.env.FRONTEND_URL}/reset-password/${resetToken}`;
         console.log("resetPasswordUrl", resetPasswordUrl);
         const subject = 'Reset Password';
         const message = `You can reset your password by clicking <a href=${resetPasswordUrl} target="_blank">Reset your password</a>\nIf the above link does not work for some reason then copy paste this link in new tab ${resetPasswordUrl}.\n If you have not requested this, kindly ignore.`;
@@ -145,8 +145,8 @@ const forgotPassword = async (req, res, next) => {
 
             })
         } catch (e) {
-            user.forgetPasswordToken = undefined;
-            user.forgetPasswordExpiry = undefined;
+            user.forgotPasswordToken = undefined;
+            user.forgotPasswordExpiry = undefined;
             await user.save();
             return next(new AppError(e.message, 500));
         }
@@ -168,6 +168,7 @@ const resetPassword = async (req, res, next) => {
             .update(resetToken)
             .digest('hex');
 
+
         console.log("forgotPasswordToken", forgotPasswordToken);
         const user = await User.findOne({
             forgotPasswordToken,
@@ -178,8 +179,8 @@ const resetPassword = async (req, res, next) => {
             return next(new AppError('Token is invalid or expired', 400));
         }
         user.password = password;
-        user.forgetPasswordToken = undefined;
-        user.forgetPasswordExpiry = undefined;
+        user.forgotPasswordToken = undefined;
+        user.forgotPasswordExpiry = undefined;
         await user.save();
         return res.status(200).json({
             success: true,
@@ -190,7 +191,75 @@ const resetPassword = async (req, res, next) => {
     }
 }
 
+const changePassword = async (req, res, next) => {
+    try {
+        const { oldPassword, newPassword } = req.body;
+        const { id } = req.user;
+        if (!oldPassword || !newPassword) {
+            return next(new AppError('All fields are manddatory', 400));
+        }
+        const user = await User.findById(id).select('+password');
+        if (!user) {
+            return next(new AppError('User does not exist', 400));
+        }
+        const isPasswordValid = await user.comparePassword(oldPassword);
+        if (!isPasswordValid) {
+            return next(new AppError('Invalid Old Password', 400));
+        }
+        user.password = newPassword;
+        await user.save();
+        user.password = undefined;
+        return res.status(200).json({
+            success: true,
+            message: 'Password Change Successfully...',
+        })
+    } catch (e) {
+        return next(new AppError(e.message, 500));
+    }
+}
 
+const updateUser = async (req, res, next) => {
+    try {
+        console.log("Start...");
+        const { fullName } = req.body;
+        const { id } = req.user;
+        console.log(id);
+        const user = await User.findById(id);
+        if (!user) {
+            return next(new AppError('User does not exist', 400));
+        }
+        if (fullName) {
+            user.fullName = fullName;
+        }
+        if (req.file) {
+            await cloudinary.v2.uploader.destroy(user.avatar.public_id);
+            try {
+                const result = await cloudinary.v2.uploader.upload(req.file.path, {
+                    folder: 'lms',
+                    width: 250,
+                    height: 250,
+                    gravity: 'faces',
+                    crop: 'fill',
+                });
+                if (result) {
+                    user.avatar.public_id = result.public_id;
+                    user.avatar.secure_url = result.secure_url;
+                }
+                fs.rm(`uploads/${req.file.filename}`)
+            } catch (e) {
+                next(new AppError(e.message, 400));
+            }
+            await user.save();
+            return res.status(200).json({
+                success: true,
+                message: 'User Details Updated Successfully...',
+                user,
+            })
+        }
+    } catch (e) {
+        return next(new AppError(e.message, 500));
+    }
+}
 
 export {
     register,
@@ -199,4 +268,6 @@ export {
     getProfile,
     forgotPassword,
     resetPassword,
+    changePassword,
+    updateUser,
 }

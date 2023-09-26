@@ -41,8 +41,8 @@ const userSchema = new Schema({
         enum: ['USER', 'ADMIN'],
         default: 'USER',
     },
-    forgetPasswordToken: String,
-    forgetPasswordExpiry: Date,
+    forgotPasswordToken: String,
+    forgotPasswordExpiry: Date,
 }, {
     timestamps: true,
 });
@@ -72,11 +72,12 @@ userSchema.methods = {
     },
     generatePasswordResetToken: async function () {
         const resetToken = crypto.randomBytes(20).toString('hex');
-        this.forgetPasswordToken = crypto
+
+        this.forgotPasswordToken = crypto
             .createHash('sha256')
             .update(resetToken)
             .digest('hex');
-        this.forgetPasswordExpiry = Date.now() + 15 * 60 * 1000;
+        this.forgotPasswordExpiry = Date.now() + 15 * 60 * 1000;
         return resetToken;
     }
 }
