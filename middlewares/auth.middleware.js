@@ -25,7 +25,20 @@ const authorizedRole = (...roles) => async(req, res, next) => {
         next(new AppError(e.message, 500));
     }
 }
+
+const authorizeSubscribe = async (req,res,next) => {
+    try{
+        const subscription = req.user.subscription;
+        const currentRole = req.user.role;
+        if(currentRole !== 'ADMIN' && subscription.status !== 'active'){
+            return next(new AppError('Please subscribce to access this remote!',403));
+        }
+    }catch(e){
+        return next(new AppError(e.message,500));
+    }
+}
 export {
     isLoggedIn,
-    authorizedRole
+    authorizedRole,
+    authorizeSubscribe
 }
