@@ -21,16 +21,16 @@ const courseSchema = new Schema({
     thumbnail: {
         public_id: {
             type: String,
-            required: true,
+            // required: true,
         },
         secure_url: {
             type: String,
-            required: true,
+            // required: true,
         }
     },
     lectures: [
         {
-            type: String,
+            title: String,
             description: String,
             lecture: {
                 public_id: {
