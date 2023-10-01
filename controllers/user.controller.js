@@ -4,20 +4,76 @@ import cloudinary from 'cloudinary';
 import fs from 'fs/promises';
 import sendEmail from "../utils/sendEmail.js";
 import crypto from 'crypto';
+import otpGenerator from 'otp-generator';
+import OTP from "../models/otp.model.js";
 const cookieOptions = {
     maxAge: 7 * 24 * 60 * 60 * 1000, // 7 Days
     httpOnly: true,
     secure: true,
 }
+
+const sendOTP = async (req, res, next) => {
+    try {
+        console.log("Starting...");
+        const { email } = req.body;
+        console.log(email);
+        const existUser = await User.findOne({ email });
+        if (existUser) {
+            return next(new AppError("User is Already Registered", 402));
+        }
+
+        var otp = otpGenerator.generate(6, {
+            upperCaseAlphabets: false,
+            lowerCaseAlphabets: false,
+            specialChars: false,
+        });
+
+        const result = await OTP.findOne({ otp: otp });
+        console.log("Result is Generate OTP Func")
+        console.log("OTP", otp)
+        console.log("Result", result)
+
+        while (result) {
+            otp = otpGenerator.generate(6, {
+                upperCaseAlphabets: false,
+                lowerCaseAlphabets: false,
+                specialChars: false,
+            });
+        }
+
+        const otpPayload = { email, otp };
+        const otpBody = await OTP.create(otpPayload);
+        console.log("OTP Body", otpBody)
+        res.status(200).json({
+            success: true,
+            message: `OTP Sent Successfully`,
+            otp,
+        })
+    } catch (e) {
+        return next(new AppError(e.message, 500));
+    }
+}
+
 const register = async (req, res, next) => {
     try {
-        const { fullName, email, password } = req.body;
-        if (!fullName || !email || !password) {
+        console.log("Starting....");
+        const { fullName, email, password, otp } = req.body;
+
+        if (!fullName || !email || !password || !otp) {
             return next(new AppError('All fields are required', 400));
         }
         const userExits = await User.findOne({ email });
+
         if (userExits) {
             return next(new AppError('Email already exits', 400));
+        }
+
+        const response = await OTP.findOne({ email }).sort({ createdAt: -1 }).limit(1);
+
+        if (response.otp.length === 0) {
+            return next(new AppError("The OTP is not valid", 402));
+        } else if (otp !== response.otp) {
+            return next(new AppError("The OTP is not valid", 402));
         }
         const user = await User.create({
             fullName,
@@ -29,6 +85,7 @@ const register = async (req, res, next) => {
                     'https://res.cloudinary.com/du9jzqlpt/image/upload/v1674647316/avatar_drzgxv.jpg',
             }
         });
+
         if (!user) {
             return next(new AppError('User registration failed, Please try again', 400));
         }
@@ -193,8 +250,11 @@ const resetPassword = async (req, res, next) => {
 
 const changePassword = async (req, res, next) => {
     try {
+        console.log("Starting....");
         const { oldPassword, newPassword } = req.body;
+        console.log(oldPassword);
         const { id } = req.user;
+        console.log(id);
         if (!oldPassword || !newPassword) {
             return next(new AppError('All fields are manddatory', 400));
         }
@@ -223,7 +283,6 @@ const updateUser = async (req, res, next) => {
         console.log("Start...");
         const { fullName } = req.body;
         const { id } = req.user;
-        console.log(id);
         const user = await User.findById(id);
         if (!user) {
             return next(new AppError('User does not exist', 400));
@@ -231,6 +290,7 @@ const updateUser = async (req, res, next) => {
         if (fullName) {
             user.fullName = fullName;
         }
+        console.log(fullName);
         if (req.file) {
             await cloudinary.v2.uploader.destroy(user.avatar.public_id);
             try {
@@ -244,18 +304,42 @@ const updateUser = async (req, res, next) => {
                 if (result) {
                     user.avatar.public_id = result.public_id;
                     user.avatar.secure_url = result.secure_url;
+                    fs.rm(`uploads/${req.file.filename}`)
                 }
-                fs.rm(`uploads/${req.file.filename}`)
             } catch (e) {
                 next(new AppError(e.message, 400));
             }
             await user.save();
+            console.log(user);
             return res.status(200).json({
                 success: true,
                 message: 'User Details Updated Successfully...',
                 user,
-            })
+            });
         }
+    } catch (e) {
+        return next(new AppError(e.message, 500));
+    }
+}
+
+const deleteAccount = async (req, res, next) => {
+    try {
+        const { id } = req.user;
+
+        const user = await User.findById({ _id: id });
+
+        if(!user){
+            return next(new AppError('User not found',402));
+        }
+        await cloudinary.uploader.destroy(user.avatar.public_id);
+
+        await User.findByIdAndDelete({_id:id});
+
+        res.status(200).json({
+            success: true,
+            message:'Deleted Successfully...',
+        })
+
     } catch (e) {
         return next(new AppError(e.message, 500));
     }
@@ -270,4 +354,6 @@ export {
     resetPassword,
     changePassword,
     updateUser,
+    sendOTP,
+    deleteAccount,
 }

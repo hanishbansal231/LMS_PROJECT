@@ -1,8 +1,8 @@
 import { config } from "dotenv";
-import { razorpay } from '../server'
+import { razorpay } from '../server.js'
 import AppError from "../utils/error.util.js";
 import User from '../models/user.model.js'
-import Payment from "../models/payment.model";
+import Payment from "../models/payment.model.js";
 import crypto from 'crypto';
 config();
 const getRazorpayApiKey = async (req, res, next) => {
